@@ -1,2 +1,2 @@
 # habit-tracker-service
-Backend service for the habit-tracker application
+Backend service for doitdone.io, a habit-tracker application
