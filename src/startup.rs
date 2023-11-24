@@ -9,8 +9,6 @@ use actix_web::{
     web::{self},
     App, HttpServer,
 };
-use actix_web_flash_messages::storage::CookieMessageStore;
-use actix_web_flash_messages::FlashMessagesFramework;
 use actix_web_lab::middleware::from_fn;
 use secrecy::{ExposeSecret, Secret};
 use sqlx::postgres::PgPoolOptions;
@@ -18,7 +16,7 @@ use sqlx::PgPool;
 use std::net::TcpListener;
 use tracing_actix_web::TracingLogger;
 
-use crate::routes::{health_check, get_daily_task_list};
+use crate::routes::{change_password, get_daily_task_list, health_check, log_out, login};
 
 pub struct Application {
     port: u16,
@@ -68,27 +66,26 @@ pub async fn run(
     let db_pool = Data::new(db_pool);
     let base_url = Data::new(ApplicationBaseUrl(base_url));
     let secret_key = Key::from(hmac_secret.expose_secret().as_bytes());
-    let message_store = CookieMessageStore::builder(secret_key.clone()).build();
-    let message_framework = FlashMessagesFramework::builder(message_store).build();
     let redis_store = RedisSessionStore::new(redis_uri.expose_secret()).await?;
 
     sqlx::migrate!().run(&**db_pool).await?;
 
     let server = HttpServer::new(move || {
         App::new()
-            .wrap(message_framework.clone())
             .wrap(SessionMiddleware::new(
                 redis_store.clone(),
                 secret_key.clone(),
             ))
             .wrap(TracingLogger::default())
             .route("/health_check", web::get().to(health_check))
+            .route("/login", web::post().to(login))
             .service(
                 web::scope("/api")
-                .wrap(from_fn(reject_anonymous_users))
-                .route("/dailytasklist", web::get().to(get_daily_task_list))
+                    .wrap(from_fn(reject_anonymous_users))
+                    .route("/dailytasklist", web::get().to(get_daily_task_list))
+                    .route("/logout", web::post().to(log_out))
+                    .route("/changepassword", web::post().to(change_password)),
             )
-            
             .app_data(db_pool.clone())
             .app_data(base_url.clone())
     })

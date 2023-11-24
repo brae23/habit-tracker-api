@@ -9,5 +9,5 @@ async fn user_must_be_logged_in_to_get_daily_task_list() {
     let response = app.get_daily_task_list().await;
 
     // Assert
-    assert_eq!(response.status().as_u16(), 403);
+    assert_eq!(response.status().as_u16(), 401);
 }

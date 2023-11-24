@@ -1,49 +1,44 @@
-use actix_web::{HttpResponse, web, http::header::ContentType};
+use actix_web::{http::header::ContentType, web, HttpResponse};
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::{session_state::TypedSession, utils::e500, domain::{List, Task}};
+use crate::{
+    authentication::UserId,
+    domain::{List, Task},
+    utils::e500,
+};
 
 #[tracing::instrument(
     name = "Get daily task list for user using user_id and date"
-    skip(pool, session)
-    fields(user_id=tracing::field::Empty)
+    skip(pool)
 )]
 pub async fn get_daily_task_list(
     pool: web::Data<PgPool>,
-    session: TypedSession,
+    user_id: web::ReqData<UserId>,
 ) -> Result<HttpResponse, actix_web::Error> {
-    let user_id = match session.get_user_id().map_err(e500)? {
-        Some(id) => Ok(id),
-        None => Err(e500("Failed to get user id from session store"))
-    }?;
+    let list_row_data = get_list_data(&pool, **user_id).await.map_err(e500)?;
 
-    tracing::Span::current().record("user_id", &tracing::field::display(&user_id));
-
-    let list_row_data = get_list_data(&pool, user_id).await.map_err(e500)?;
-
-    let task_data = get_task_data(&pool, list_row_data.list_id).await.map_err(e500)?;
+    let task_data = get_task_data(&pool, list_row_data.list_id)
+        .await
+        .map_err(e500)?;
 
     Ok(HttpResponse::Ok()
-    .content_type(ContentType::json())
-    .json(List {
-        list_id: list_row_data.list_id,
-        name: list_row_data.name,
-        description: list_row_data.description,
-        created_date: list_row_data.created_date,
-        list_items: task_data
-    }))
+        .content_type(ContentType::json())
+        .json(List {
+            list_id: list_row_data.list_id,
+            name: list_row_data.name,
+            description: list_row_data.description,
+            created_date: list_row_data.created_date,
+            list_items: task_data,
+        }))
 }
 
 #[tracing::instrument(
     name = "Get list_id using user_id and date"
     skip(pool, user_id)
 )]
-async fn get_list_data(
-    pool: &PgPool,
-    user_id: Uuid,
-) -> Result<ListRow, sqlx::Error> {
+async fn get_list_data(pool: &PgPool, user_id: Uuid) -> Result<ListRow, sqlx::Error> {
     let result: Option<ListRow> = sqlx::query_as!(
         ListRow,
         r#"
@@ -68,7 +63,7 @@ async fn get_list_data(
     match result {
         Some(res) => Ok(res),
         None => {
-            let result = create_new_list(&pool, user_id).await?;
+            let result = create_new_list(pool, user_id).await?;
             Ok(result)
         }
     }
@@ -78,10 +73,7 @@ async fn get_list_data(
     name = "Create list using user_id"
     skip(pool, user_id)
 )]
-async fn create_new_list(
-    pool: &PgPool,
-    user_id: Uuid,
-) -> Result<ListRow, sqlx::Error> {
+async fn create_new_list(pool: &PgPool, user_id: Uuid) -> Result<ListRow, sqlx::Error> {
     // Set new list name
     let list_name = "list name";
 
@@ -110,7 +102,7 @@ async fn create_new_list(
         tracing::error!("Failed to execute query: {:?}", e);
         e
     })?;
-    
+
     Ok(result)
 }
 

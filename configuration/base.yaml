@@ -6,6 +6,6 @@ database:
   port: 5432
   username: "postgres"
   password: "password"
-  database_name: "newsletter"
+  database_name: "habit_tracker"
   require_ssl: false
 redis_uri: "redis://127.0.0.1:6379"

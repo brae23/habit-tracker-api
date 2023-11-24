@@ -1,5 +1,5 @@
 use chrono::serde::ts_seconds_option;
-use chrono::{Utc, DateTime};
+use chrono::{DateTime, Utc};
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct Task {

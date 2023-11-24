@@ -1,6 +1,6 @@
+use super::Task;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
-use super::Task;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct List {

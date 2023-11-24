@@ -1,8 +1,8 @@
-use argon2::{password_hash::SaltString, Argon2, Algorithm, Version, Params, PasswordHasher};
+use argon2::{password_hash::SaltString, Algorithm, Argon2, Params, PasswordHasher, Version};
 use habit_tracker::{
     configuration::{get_configuration, DatabaseSettings},
     startup::{get_connection_pool, Application},
-    telemetry::{get_subscriber, init_subscriber}, domain::List,
+    telemetry::{get_subscriber, init_subscriber},
 };
 use once_cell::sync::Lazy;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
@@ -33,6 +33,7 @@ impl TestUser {
         .hash_password(self.password.as_bytes(), &salt)
         .unwrap()
         .to_string();
+
         sqlx::query!(
             "INSERT INTO users (user_id, user_name, password_hash)
             VALUES($1, $2, $3)",
@@ -68,13 +69,53 @@ pub struct TestApp {
 }
 
 impl TestApp {
+    pub async fn login_as_test_user(&self) {
+        let body = serde_json::json!({
+            "username": &self.test_user.user_name,
+            "password": &self.test_user.password
+        });
+        self.post_login(&body).await;
+    }
+
     pub async fn get_daily_task_list(&self) -> reqwest::Response {
         self.api_client
             .get(&format!("{}/api/dailytasklist", &self.address))
             .send()
             .await
             .expect("Failed to execute request.")
-    } 
+    }
+
+    pub async fn post_change_password<Body>(&self, body: &Body) -> reqwest::Response
+    where
+        Body: serde::Serialize,
+    {
+        self.api_client
+            .post(format!("{}/api/changepassword", &self.address))
+            .json(body)
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
+
+    pub async fn post_logout(&self) -> reqwest::Response {
+        self.api_client
+            .post(&format!("{}/api/logout", &self.address))
+            .send()
+            .await
+            .expect("Failed to execute requeset.")
+    }
+
+    pub async fn post_login<Body>(&self, body: &Body) -> reqwest::Response
+    where
+        Body: serde::Serialize,
+    {
+        self.api_client
+            .post(&format!("{}/login", &self.address))
+            .json(body) // makes sure its URL encoded and Content-Type header is set correctly
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
 }
 
 pub async fn spawn_app() -> TestApp {
@@ -110,6 +151,18 @@ pub async fn spawn_app() -> TestApp {
 
     test_app.test_user.store(&test_app.db_pool).await;
     test_app
+}
+
+pub fn assert_is_unauthorized(response: &reqwest::Response) {
+    assert_eq!(response.status().as_u16(), 401);
+}
+
+pub fn assert_is_bad_request(response: &reqwest::Response) {
+    assert_eq!(response.status().as_u16(), 400);
+}
+
+pub fn assert_is_success(response: &reqwest::Response) {
+    assert_eq!(response.status().as_u16(), 200);
 }
 
 async fn configure_database(config: &DatabaseSettings) -> PgPool {
