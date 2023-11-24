@@ -1,12 +1,10 @@
 use actix_web::{web, HttpResponse};
-use anyhow::Context;
 use secrecy::{ExposeSecret, Secret};
 use sqlx::PgPool;
-use uuid::Uuid;
 
 use crate::{
     authentication::{validate_credentials, AuthError, Credentials, UserId},
-    utils::e500,
+    utils::{e500, get_username},
 };
 
 #[derive(serde::Deserialize)]
@@ -69,20 +67,4 @@ pub async fn change_password(
     // FlashMessage::error("Your password has been changed.").send();
 
     Ok(HttpResponse::Ok().finish())
-}
-
-#[tracing::instrument(name = "Get username", skip(pool))]
-async fn get_username(user_id: Uuid, pool: &PgPool) -> Result<String, anyhow::Error> {
-    let row = sqlx::query!(
-        r#"
-        SELECT user_name
-        FROM users
-        WHERE user_id = $1
-        "#,
-        user_id,
-    )
-    .fetch_one(pool)
-    .await
-    .context("Failed to perform a query to retrieve a username.")?;
-    Ok(row.user_name)
 }

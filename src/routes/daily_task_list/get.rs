@@ -6,7 +6,7 @@ use uuid::Uuid;
 use crate::{
     authentication::UserId,
     domain::{List, Task},
-    utils::e500,
+    utils::{e500, get_username},
 };
 
 #[tracing::instrument(
@@ -17,7 +17,11 @@ pub async fn get_daily_task_list(
     pool: web::Data<PgPool>,
     user_id: web::ReqData<UserId>,
 ) -> Result<HttpResponse, actix_web::Error> {
-    let list_row_data = get_list_data(&pool, **user_id).await.map_err(e500)?;
+    let user_name = get_username(**user_id, &pool).await.map_err(e500)?;
+
+    let list_row_data = get_list_data(&pool, **user_id, user_name)
+        .await
+        .map_err(e500)?;
 
     let task_data = get_task_data(&pool, list_row_data.list_id)
         .await
@@ -36,9 +40,13 @@ pub async fn get_daily_task_list(
 
 #[tracing::instrument(
     name = "Get list_id using user_id and date"
-    skip(pool, user_id)
+    skip(pool)
 )]
-async fn get_list_data(pool: &PgPool, user_id: Uuid) -> Result<ListRow, sqlx::Error> {
+async fn get_list_data(
+    pool: &PgPool,
+    user_id: Uuid,
+    user_name: String,
+) -> Result<ListRow, sqlx::Error> {
     let result: Option<ListRow> = sqlx::query_as!(
         ListRow,
         r#"
@@ -63,7 +71,7 @@ async fn get_list_data(pool: &PgPool, user_id: Uuid) -> Result<ListRow, sqlx::Er
     match result {
         Some(res) => Ok(res),
         None => {
-            let result = create_new_list(pool, user_id).await?;
+            let result = create_new_list(pool, user_id, user_name).await?;
             Ok(result)
         }
     }
@@ -71,11 +79,16 @@ async fn get_list_data(pool: &PgPool, user_id: Uuid) -> Result<ListRow, sqlx::Er
 
 #[tracing::instrument(
     name = "Create list using user_id"
-    skip(pool, user_id)
+    skip(pool)
 )]
-async fn create_new_list(pool: &PgPool, user_id: Uuid) -> Result<ListRow, sqlx::Error> {
-    // Set new list name
-    let list_name = "list name";
+async fn create_new_list(
+    pool: &PgPool,
+    user_id: Uuid,
+    user_name: String,
+) -> Result<ListRow, sqlx::Error> {
+    // Set new list name as current date
+    let list_name = "New Daily Task List";
+    let description = format!("New Daily Task List for {}", user_name);
 
     let result = sqlx::query_as!(
         ListRow,
@@ -84,9 +97,10 @@ async fn create_new_list(pool: &PgPool, user_id: Uuid) -> Result<ListRow, sqlx::
             list_id,
             name,
             created_by_user_id,
-            is_daily_task_list
+            is_daily_task_list,
+            description
         )
-        VALUES($1, $2, $3, TRUE)
+        VALUES($1, $2, $3, TRUE, $4)
         RETURNING 
             list_id,
             name,
@@ -95,6 +109,7 @@ async fn create_new_list(pool: &PgPool, user_id: Uuid) -> Result<ListRow, sqlx::
         Uuid::new_v4(),
         list_name,
         &user_id,
+        description,
     )
     .fetch_one(pool)
     .await

@@ -1,3 +1,7 @@
+use anyhow::Context;
+use sqlx::PgPool;
+use uuid::Uuid;
+
 pub fn e500<T>(e: T) -> actix_web::Error
 where
     T: std::fmt::Debug + std::fmt::Display + 'static,
@@ -16,4 +20,20 @@ pub fn error_chain_fmt(
         current = cause.source();
     }
     Ok(())
+}
+
+#[tracing::instrument(name = "Get username", skip(pool))]
+pub async fn get_username(user_id: Uuid, pool: &PgPool) -> Result<String, anyhow::Error> {
+    let row = sqlx::query!(
+        r#"
+        SELECT user_name
+        FROM users
+        WHERE user_id = $1
+        "#,
+        user_id,
+    )
+    .fetch_one(pool)
+    .await
+    .context("Failed to perform a query to retrieve a username.")?;
+    Ok(row.user_name)
 }
