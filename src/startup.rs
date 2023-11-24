@@ -1,3 +1,4 @@
+use crate::authentication::reject_anonymous_users;
 use crate::configuration::{DatabaseSettings, Settings};
 use actix_session::storage::RedisSessionStore;
 use actix_session::SessionMiddleware;
@@ -10,13 +11,14 @@ use actix_web::{
 };
 use actix_web_flash_messages::storage::CookieMessageStore;
 use actix_web_flash_messages::FlashMessagesFramework;
+use actix_web_lab::middleware::from_fn;
 use secrecy::{ExposeSecret, Secret};
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 use std::net::TcpListener;
 use tracing_actix_web::TracingLogger;
 
-use crate::routes::health_check;
+use crate::routes::{health_check, get_daily_task_list};
 
 pub struct Application {
     port: u16,
@@ -69,6 +71,9 @@ pub async fn run(
     let message_store = CookieMessageStore::builder(secret_key.clone()).build();
     let message_framework = FlashMessagesFramework::builder(message_store).build();
     let redis_store = RedisSessionStore::new(redis_uri.expose_secret()).await?;
+
+    sqlx::migrate!().run(&**db_pool).await?;
+
     let server = HttpServer::new(move || {
         App::new()
             .wrap(message_framework.clone())
@@ -78,6 +83,12 @@ pub async fn run(
             ))
             .wrap(TracingLogger::default())
             .route("/health_check", web::get().to(health_check))
+            .service(
+                web::scope("/api")
+                .wrap(from_fn(reject_anonymous_users))
+                .route("/dailytasklist", web::get().to(get_daily_task_list))
+            )
+            
             .app_data(db_pool.clone())
             .app_data(base_url.clone())
     })

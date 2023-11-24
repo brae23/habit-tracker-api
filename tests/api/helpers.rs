@@ -1,7 +1,8 @@
+use argon2::{password_hash::SaltString, Argon2, Algorithm, Version, Params, PasswordHasher};
 use habit_tracker::{
     configuration::{get_configuration, DatabaseSettings},
     startup::{get_connection_pool, Application},
-    telemetry::{get_subscriber, init_subscriber},
+    telemetry::{get_subscriber, init_subscriber}, domain::List,
 };
 use once_cell::sync::Lazy;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
@@ -9,7 +10,7 @@ use uuid::Uuid;
 
 pub struct TestUser {
     pub user_id: Uuid,
-    pub username: String,
+    pub user_name: String,
     pub password: String,
 }
 
@@ -17,32 +18,32 @@ impl TestUser {
     pub fn generate() -> Self {
         Self {
             user_id: Uuid::new_v4(),
-            username: Uuid::new_v4().to_string(),
+            user_name: Uuid::new_v4().to_string(),
             password: Uuid::new_v4().to_string(),
         }
     }
 
-    // async fn store(&self, pool: &PgPool) {
-    //     let salt = SaltString::generate(&mut rand::thread_rng());
-    //     let password_hash = Argon2::new(
-    //         Algorithm::Argon2id,
-    //         Version::V0x13,
-    //         Params::new(15000, 2, 1, None).unwrap(),
-    //     )
-    //     .hash_password(self.password.as_bytes(), &salt)
-    //     .unwrap()
-    //     .to_string();
-    //     sqlx::query!(
-    //         "INSERT INTO users (user_id, username, password_hash)
-    //         VALUES($1, $2, $3)",
-    //         self.user_id,
-    //         self.username,
-    //         password_hash,
-    //     )
-    //     .execute(pool)
-    //     .await
-    //     .expect("Failed to store test user.");
-    // }
+    async fn store(&self, pool: &PgPool) {
+        let salt = SaltString::generate(&mut rand::thread_rng());
+        let password_hash = Argon2::new(
+            Algorithm::Argon2id,
+            Version::V0x13,
+            Params::new(15000, 2, 1, None).unwrap(),
+        )
+        .hash_password(self.password.as_bytes(), &salt)
+        .unwrap()
+        .to_string();
+        sqlx::query!(
+            "INSERT INTO users (user_id, user_name, password_hash)
+            VALUES($1, $2, $3)",
+            self.user_id,
+            self.user_name,
+            password_hash,
+        )
+        .execute(pool)
+        .await
+        .expect("Failed to store test user.");
+    }
 }
 
 static TRACING: Lazy<()> = Lazy::new(|| {
@@ -66,7 +67,15 @@ pub struct TestApp {
     pub api_client: reqwest::Client,
 }
 
-// impl TestApp {}
+impl TestApp {
+    pub async fn get_daily_task_list(&self) -> reqwest::Response {
+        self.api_client
+            .get(&format!("{}/api/dailytasklist", &self.address))
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    } 
+}
 
 pub async fn spawn_app() -> TestApp {
     Lazy::force(&TRACING);
@@ -99,7 +108,7 @@ pub async fn spawn_app() -> TestApp {
         api_client: client,
     };
 
-    // test_app.test_user.store(&test_app.db_pool).await;
+    test_app.test_user.store(&test_app.db_pool).await;
     test_app
 }
 
