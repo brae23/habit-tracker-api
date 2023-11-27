@@ -1,4 +1,4 @@
-use actix_web::{web, HttpResponse};
+use actix_web::{web, HttpResponse, error::InternalError};
 use secrecy::{ExposeSecret, Secret};
 use sqlx::PgPool;
 
@@ -22,23 +22,24 @@ pub async fn change_password(
     let user_id = user_id.into_inner();
 
     if form.new_password.expose_secret() != form.new_password_check.expose_secret() {
-        // Update to send with bad request response
-
-        // FlashMessage::error(
-        //     "You entered two different new passwords - the field values must match.",
-        // )
-        // .send();
-        return Ok(HttpResponse::BadRequest().finish());
+        let reason = "Two different passwords were entered - the field values must match.".into();
+        let response = HttpResponse::BadRequest().reason(reason).finish();
+        let error = anyhow::anyhow!(reason);
+        return Err(InternalError::from_response(error, response).into())
     }
 
     if form.new_password.expose_secret().len() < 12 {
-        // Update to send with bad request response
+        let reason = "The new password is too short - it must be between 12 and 128 characters long.".into();
+        let response = HttpResponse::BadRequest().reason(reason).finish();
+        let error = anyhow::anyhow!(reason);
+        return Err(InternalError::from_response(error, response).into())
+    }
 
-        // FlashMessage::error(
-        //     "The new password is too short - it must be between 12 and 128 characters long.",
-        // )
-        // .send();
-        return Ok(HttpResponse::BadRequest().finish());
+    if form.new_password.expose_secret().len() > 128 {
+        let reason = "The new password is too long - it must be between 12 and 128 characters long.".into();
+        let response = HttpResponse::BadRequest().reason(reason).finish();
+        let error = anyhow::anyhow!(reason);
+        return Err(InternalError::from_response(error, response).into())
     }
 
     let username = get_username(*user_id, &pool).await.map_err(e500)?;
@@ -50,10 +51,10 @@ pub async fn change_password(
     if let Err(e) = validate_credentials(credentials, &pool).await {
         return match e {
             AuthError::InvalidCredentials(_) => {
-                // Update to send with bad request response
-
-                // FlashMessage::error("The current password is incorrect.").send();
-                Ok(HttpResponse::BadRequest().finish())
+                let reason = "The current password is incorrect.".into();
+                let response = HttpResponse::BadRequest().reason(reason).finish();
+                let error = anyhow::anyhow!(reason);
+                Err(InternalError::from_response(error, response).into())
             }
             AuthError::UnexpectedError(_) => Err(e500(e)),
         };
@@ -62,9 +63,6 @@ pub async fn change_password(
     crate::authentication::change_password(*user_id, form.0.new_password, &pool)
         .await
         .map_err(e500)?;
-
-    // Update to send with bad request response
-    // FlashMessage::error("Your password has been changed.").send();
 
     Ok(HttpResponse::Ok().finish())
 }
