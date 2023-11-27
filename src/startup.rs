@@ -18,7 +18,7 @@ use sqlx::PgPool;
 use std::net::TcpListener;
 use tracing_actix_web::TracingLogger;
 
-use crate::routes::{change_password, get_daily_task_list, health_check, log_out, login};
+use crate::handlers::{change_password, get_daily_task_list, health_check, log_out, login};
 
 pub struct Application {
     port: u16,
