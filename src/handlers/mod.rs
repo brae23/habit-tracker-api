@@ -1,11 +1,7 @@
-mod daily_task_list;
+mod api;
+mod auth;
 mod health_check;
-mod login;
-mod logout;
-mod change_password;
 
-pub use daily_task_list::*;
-pub use health_check::*;
-pub use login::login;
-pub use logout::log_out;
-pub use change_password::change_password;
+pub use api::*;
+pub use auth::*;
+pub use health_check::health_check;
