@@ -1,9 +1,10 @@
-use actix_web::{web, HttpResponse, error::InternalError};
+use actix_web::{error::InternalError, web, HttpResponse};
 use secrecy::{ExposeSecret, Secret};
 use sqlx::PgPool;
 
 use crate::{
-    authentication::{validate_credentials, AuthError, Credentials, UserId},
+    authentication::{validate_credentials, Credentials, UserId},
+    domain::AuthError,
     utils::{e500, get_username},
 };
 
@@ -22,24 +23,26 @@ pub async fn change_password(
     let user_id = user_id.into_inner();
 
     if form.new_password.expose_secret() != form.new_password_check.expose_secret() {
-        let reason = "Two different passwords were entered - the field values must match.".into();
+        let reason = "Two different passwords were entered - the field values must match.";
         let response = HttpResponse::BadRequest().reason(reason).finish();
         let error = anyhow::anyhow!(reason);
-        return Err(InternalError::from_response(error, response).into())
+        return Err(InternalError::from_response(error, response).into());
     }
 
     if form.new_password.expose_secret().len() < 12 {
-        let reason = "The new password is too short - it must be between 12 and 128 characters long.".into();
+        let reason =
+            "The new password is too short - it must be between 12 and 128 characters long.";
         let response = HttpResponse::BadRequest().reason(reason).finish();
         let error = anyhow::anyhow!(reason);
-        return Err(InternalError::from_response(error, response).into())
+        return Err(InternalError::from_response(error, response).into());
     }
 
     if form.new_password.expose_secret().len() > 128 {
-        let reason = "The new password is too long - it must be between 12 and 128 characters long.".into();
+        let reason =
+            "The new password is too long - it must be between 12 and 128 characters long.";
         let response = HttpResponse::BadRequest().reason(reason).finish();
         let error = anyhow::anyhow!(reason);
-        return Err(InternalError::from_response(error, response).into())
+        return Err(InternalError::from_response(error, response).into());
     }
 
     let username = get_username(*user_id, &pool).await.map_err(e500)?;
@@ -51,7 +54,7 @@ pub async fn change_password(
     if let Err(e) = validate_credentials(credentials, &pool).await {
         return match e {
             AuthError::InvalidCredentials(_) => {
-                let reason = "The current password is incorrect.".into();
+                let reason = "The current password is incorrect.";
                 let response = HttpResponse::BadRequest().reason(reason).finish();
                 let error = anyhow::anyhow!(reason);
                 Err(InternalError::from_response(error, response).into())

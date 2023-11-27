@@ -1,7 +1,9 @@
+mod error;
 mod list;
 mod task;
-mod users;
+mod user;
 
+pub use error::*;
 pub use list::*;
 pub use task::*;
-pub use users::*;
+pub use user::*;

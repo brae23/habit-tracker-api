@@ -1,4 +1,4 @@
-use crate::telemetry::spawn_blocking_with_tracing;
+use crate::{domain::AuthError, telemetry::spawn_blocking_with_tracing};
 use anyhow::Context;
 use argon2::{
     password_hash::SaltString, Argon2, Params, PasswordHash, PasswordHasher, PasswordVerifier,
@@ -6,14 +6,6 @@ use argon2::{
 };
 use secrecy::{ExposeSecret, Secret};
 use sqlx::PgPool;
-
-#[derive(thiserror::Error, Debug)]
-pub enum AuthError {
-    #[error("Invalid credentials.")]
-    InvalidCredentials(#[source] anyhow::Error),
-    #[error(transparent)]
-    UnexpectedError(#[from] anyhow::Error),
-}
 
 #[derive(serde::Deserialize, Debug)]
 pub struct Credentials {

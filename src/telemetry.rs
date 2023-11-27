@@ -26,7 +26,7 @@ where
 }
 
 pub fn init_subscriber(subscriber: impl Subscriber + Send + Sync) {
-    LogTracer::init().expect("Failed to set logger");
+    LogTracer::init().expect("Failed to initialize logger");
     set_global_default(subscriber).expect("Failed to set subscriber");
 }
 

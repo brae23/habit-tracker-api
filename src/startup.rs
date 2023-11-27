@@ -1,10 +1,10 @@
 use crate::authentication::reject_anonymous_users;
 use crate::configuration::{DatabaseSettings, Settings};
-use actix_session::config::{PersistentSession, CookieContentSecurity};
+use actix_session::config::{CookieContentSecurity, PersistentSession};
 use actix_session::storage::RedisSessionStore;
 use actix_session::SessionMiddleware;
-use actix_web::cookie::{Key, SameSite};
 use actix_web::cookie::time::Duration;
+use actix_web::cookie::{Key, SameSite};
 use actix_web::dev::Server;
 use actix_web::web::Data;
 use actix_web::{
@@ -75,26 +75,29 @@ pub async fn run(
 
     let server = HttpServer::new(move || {
         App::new()
-            .wrap(SessionMiddleware::builder(redis_store.clone(), secret_key.clone())
-                .cookie_same_site(SameSite::Strict)
-                .cookie_content_security(CookieContentSecurity::Signed)
-                .session_lifecycle(
-                    PersistentSession::default().session_ttl(Duration::seconds(token_exp_in_secs))
-                )
-                .build())
+            .wrap(
+                SessionMiddleware::builder(redis_store.clone(), secret_key.clone())
+                    .cookie_same_site(SameSite::Strict)
+                    .cookie_content_security(CookieContentSecurity::Signed)
+                    .session_lifecycle(
+                        PersistentSession::default()
+                            .session_ttl(Duration::seconds(token_exp_in_secs)),
+                    )
+                    .build(),
+            )
             .wrap(TracingLogger::default())
             .route("/health_check", web::get().to(health_check))
             .route("/auth/login", web::post().to(login))
             .service(
                 web::scope("/auth")
-                .wrap(from_fn(reject_anonymous_users))
-                .route("/logout", web::post().to(log_out))
-                .route("/changepassword", web::post().to(change_password))
+                    .wrap(from_fn(reject_anonymous_users))
+                    .route("/logout", web::post().to(log_out))
+                    .route("/changepassword", web::post().to(change_password)),
             )
             .service(
                 web::scope("/api")
                     .wrap(from_fn(reject_anonymous_users))
-                    .route("/dailytasklist", web::get().to(get_daily_task_list))
+                    .route("/dailytasklist", web::get().to(get_daily_task_list)),
             )
             .app_data(db_pool.clone())
             .app_data(base_url.clone())
