@@ -1,6 +1,5 @@
 use crate::authentication::{validate_credentials, Credentials, TypedSession};
-use crate::domain::AuthError;
-use crate::utils::error_chain_fmt;
+use crate::domain::{AuthError, LoginError};
 use actix_web::error::InternalError;
 use actix_web::web;
 use actix_web::HttpResponse;
@@ -16,8 +15,9 @@ pub async fn login(
     pool: web::Data<PgPool>,
     session: TypedSession,
 ) -> Result<HttpResponse, InternalError<LoginError>> {
+    let username = body.0.username;
     let credentials = Credentials {
-        username: body.0.username,
+        username: username.clone(),
         password: body.0.password,
     };
 
@@ -31,7 +31,11 @@ pub async fn login(
                 let error = LoginError::UnexpectedError(e.into());
                 InternalError::from_response(error, HttpResponse::InternalServerError().finish())
             });
-            Ok(HttpResponse::Ok().finish())
+            let body = UserResponse {
+                user_id,
+                user_name: username,
+            };
+            Ok(HttpResponse::Ok().json(body))
         }
         Err(e) => match e {
             AuthError::InvalidCredentials(_) => {
@@ -52,17 +56,8 @@ pub async fn login(
     }
 }
 
-#[derive(thiserror::Error)]
-pub enum LoginError {
-    #[error("Authentication failed")]
-    #[allow(dead_code)]
-    AuthError(#[source] anyhow::Error),
-    #[error("Something went wrong")]
-    UnexpectedError(#[from] anyhow::Error),
-}
-
-impl std::fmt::Debug for LoginError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        error_chain_fmt(self, f)
-    }
+#[derive(serde::Serialize)]
+struct UserResponse {
+    pub user_id: uuid::Uuid,
+    pub user_name: String,
 }

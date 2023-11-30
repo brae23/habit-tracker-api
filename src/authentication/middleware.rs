@@ -43,7 +43,7 @@ pub async fn reject_anonymous_users(
         }
         None => {
             let response = HttpResponse::Unauthorized().finish();
-            let e = anyhow::anyhow!("The user has not logged in");
+            let e = anyhow::anyhow!("The user is unauthorized");
             Err(InternalError::from_response(e, response).into())
         }
     }

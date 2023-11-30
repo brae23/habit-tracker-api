@@ -18,8 +18,10 @@ pub struct ApplicationSettings {
     pub port: u16,
     pub host: String,
     pub base_url: String,
-    pub hmac_secret: Secret<String>,
-    pub token_exp_in_secs: i64,
+    pub signing_key: Secret<String>,
+    pub cookie_exp_in_secs: i64,
+    pub cookie_secure: bool,
+    pub cors_origin: String,
 }
 
 #[derive(serde::Deserialize, Clone)]

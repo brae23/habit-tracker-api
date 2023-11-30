@@ -90,7 +90,7 @@ impl TestApp {
         Body: serde::Serialize,
     {
         self.api_client
-            .post(format!("{}/api/changepassword", &self.address))
+            .post(format!("{}/api/auth/changepassword", &self.address))
             .json(body)
             .send()
             .await
@@ -99,7 +99,7 @@ impl TestApp {
 
     pub async fn post_logout(&self) -> reqwest::Response {
         self.api_client
-            .post(&format!("{}/api/logout", &self.address))
+            .post(&format!("{}/api/auth/logout", &self.address))
             .send()
             .await
             .expect("Failed to execute requeset.")
@@ -110,7 +110,7 @@ impl TestApp {
         Body: serde::Serialize,
     {
         self.api_client
-            .post(&format!("{}/login", &self.address))
+            .post(&format!("{}/api/auth/login", &self.address))
             .json(body) // makes sure its URL encoded and Content-Type header is set correctly
             .send()
             .await
@@ -122,7 +122,7 @@ pub async fn spawn_app() -> TestApp {
     Lazy::force(&TRACING);
 
     let configuration = {
-        let mut c = get_configuration().expect("Failed ot read configuration");
+        let mut c = get_configuration().expect("Failed to read configuration");
         c.database.database_name = Uuid::new_v4().to_string();
         c.application.port = 0;
         c

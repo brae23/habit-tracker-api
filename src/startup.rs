@@ -1,5 +1,6 @@
 use crate::authentication::reject_anonymous_users;
 use crate::configuration::{DatabaseSettings, Settings};
+use actix_cors::Cors;
 use actix_session::config::{CookieContentSecurity, PersistentSession};
 use actix_session::storage::RedisSessionStore;
 use actix_session::SessionMiddleware;
@@ -35,17 +36,9 @@ impl Application {
             "{}:{}",
             configuration.application.host, configuration.application.port
         );
-        let listener = TcpListener::bind(address)?;
+        let listener = TcpListener::bind(address.clone())?;
         let port = listener.local_addr().unwrap().port();
-        let server = run(
-            listener,
-            connection_pool,
-            configuration.application.base_url,
-            configuration.application.hmac_secret,
-            configuration.redis_uri,
-            configuration.application.token_exp_in_secs,
-        )
-        .await?;
+        let server = run(listener, connection_pool, configuration).await?;
 
         Ok(Self { port, server })
     }
@@ -62,42 +55,52 @@ impl Application {
 pub async fn run(
     listener: TcpListener,
     db_pool: PgPool,
-    base_url: String,
-    hmac_secret: Secret<String>,
-    redis_uri: Secret<String>,
-    token_exp_in_secs: i64,
+    configuration: Settings,
 ) -> Result<Server, anyhow::Error> {
-    let db_pool = Data::new(db_pool);
-    let base_url = Data::new(ApplicationBaseUrl(base_url));
+    let signing_key: Secret<String> = configuration.application.signing_key;
+    let redis_uri: Secret<String> = configuration.redis_uri;
+    let cookie_exp_in_secs: i64 = configuration.application.cookie_exp_in_secs;
+    let cookie_secure: bool = configuration.application.cookie_secure;
 
-    let secret_key = Key::from(hmac_secret.expose_secret().as_bytes());
+    let db_pool = Data::new(db_pool);
+    let base_url = Data::new(ApplicationBaseUrl(
+        configuration.application.base_url.clone(),
+    ));
+
+    let secret_key = Key::from(signing_key.expose_secret().as_bytes());
     let redis_store = RedisSessionStore::new(redis_uri.expose_secret()).await?;
 
     let server = HttpServer::new(move || {
+        let cors = Cors::default()
+            .allowed_origin(&configuration.application.cors_origin)
+            .supports_credentials()
+            .allow_any_method()
+            .allow_any_header()
+            .max_age(3600);
+
         App::new()
+            .wrap(cors)
             .wrap(
                 SessionMiddleware::builder(redis_store.clone(), secret_key.clone())
+                    .cookie_domain(None)
                     .cookie_same_site(SameSite::Strict)
+                    .cookie_secure(cookie_secure)
                     .cookie_content_security(CookieContentSecurity::Signed)
                     .session_lifecycle(
                         PersistentSession::default()
-                            .session_ttl(Duration::seconds(token_exp_in_secs)),
+                            .session_ttl(Duration::seconds(cookie_exp_in_secs)),
                     )
                     .build(),
             )
             .wrap(TracingLogger::default())
             .route("/health_check", web::get().to(health_check))
-            .route("/auth/login", web::post().to(login))
-            .service(
-                web::scope("/auth")
-                    .wrap(from_fn(reject_anonymous_users))
-                    .route("/logout", web::post().to(log_out))
-                    .route("/changepassword", web::post().to(change_password)),
-            )
+            .route("/api/auth/login", web::post().to(login))
             .service(
                 web::scope("/api")
                     .wrap(from_fn(reject_anonymous_users))
-                    .route("/dailytasklist", web::get().to(get_daily_task_list)),
+                    .route("/dailytasklist", web::get().to(get_daily_task_list))
+                    .route("/auth/logout", web::post().to(log_out))
+                    .route("/auth/changepassword", web::post().to(change_password)),
             )
             .app_data(db_pool.clone())
             .app_data(base_url.clone())

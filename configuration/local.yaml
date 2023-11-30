@@ -1,7 +1,8 @@
 application:
   host: 127.0.0.1
-  base_url: "http://127.0.0.1"
-  hmac_secret: "long-and-very-secret-random-key-needed-to-verify-message-integrity"
-  token_exp_in_secs: 120
+  base_url: "http://localhost"
+  signing_key: "b7210sTYnYeMgjsWWSVm9aIquVZhIL2vPKxurnVXCqoJJlaxcEi3shy61YV9fW6X"
+  cookie_secure: false
+  cors_origin: "http://localhost:8100"
 database:
   require_ssl: false

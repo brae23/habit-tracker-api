@@ -1,5 +1,6 @@
 application:
   port: 8000
+  cookie_exp_in_secs: 604800
 database:
   host: "localhost"
   port: 5432
