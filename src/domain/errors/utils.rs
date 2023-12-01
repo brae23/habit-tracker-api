@@ -1,6 +1,4 @@
-use anyhow::Context;
-use sqlx::PgPool;
-use uuid::Uuid;
+use actix_web::HttpResponse;
 
 pub fn e500<T>(e: T) -> actix_web::Error
 where
@@ -22,18 +20,9 @@ pub fn error_chain_fmt(
     Ok(())
 }
 
-#[tracing::instrument(name = "Get username", skip(pool))]
-pub async fn get_username(user_id: Uuid, pool: &PgPool) -> Result<String, anyhow::Error> {
-    let row = sqlx::query!(
-        r#"
-        SELECT user_name
-        FROM users
-        WHERE user_id = $1
-        "#,
-        user_id,
-    )
-    .fetch_one(pool)
-    .await
-    .context("Failed to perform a query to retrieve a username.")?;
-    Ok(row.user_name)
+pub fn to_bad_request_response(reason: &str) -> HttpResponse {
+    let body = serde_json::json!({
+        "error_message": reason
+    });
+    HttpResponse::BadRequest().json(body)
 }

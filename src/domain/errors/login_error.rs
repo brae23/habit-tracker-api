@@ -1,12 +1,4 @@
-use crate::utils::error_chain_fmt;
-
-#[derive(thiserror::Error, Debug)]
-pub enum AuthError {
-    #[error("Invalid credentials.")]
-    InvalidCredentials(#[source] anyhow::Error),
-    #[error(transparent)]
-    UnexpectedError(#[from] anyhow::Error),
-}
+use super::error_chain_fmt;
 
 #[derive(thiserror::Error)]
 pub enum LoginError {

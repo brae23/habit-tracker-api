@@ -19,7 +19,9 @@ use sqlx::PgPool;
 use std::net::TcpListener;
 use tracing_actix_web::TracingLogger;
 
-use crate::handlers::{change_password, get_daily_task_list, health_check, log_out, login};
+use crate::handlers::{
+    change_password, create_user, get_daily_task_list, health_check, log_out, login,
+};
 
 pub struct Application {
     port: u16,
@@ -83,6 +85,7 @@ pub async fn run(
             .wrap(
                 SessionMiddleware::builder(redis_store.clone(), secret_key.clone())
                     .cookie_domain(None)
+                    .cookie_name("session_id".into())
                     .cookie_same_site(SameSite::Strict)
                     .cookie_secure(cookie_secure)
                     .cookie_content_security(CookieContentSecurity::Signed)
@@ -95,6 +98,7 @@ pub async fn run(
             .wrap(TracingLogger::default())
             .route("/health_check", web::get().to(health_check))
             .route("/api/auth/login", web::post().to(login))
+            .route("/api/auth/createuser", web::post().to(create_user))
             .service(
                 web::scope("/api")
                     .wrap(from_fn(reject_anonymous_users))

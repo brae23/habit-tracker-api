@@ -1,5 +1,5 @@
 use crate::authentication::{validate_credentials, Credentials, TypedSession};
-use crate::domain::{AuthError, LoginError};
+use crate::domain::{AuthError, LoginError, UserResponse};
 use actix_web::error::InternalError;
 use actix_web::web;
 use actix_web::HttpResponse;
@@ -7,6 +7,7 @@ use actix_web::HttpResponse;
 use sqlx::PgPool;
 
 #[tracing::instrument(
+    name="Login"
     skip(body, pool, session)
     fields(username=tracing::field::Empty, user_id=tracing::field::Empty)
 )]
@@ -27,10 +28,10 @@ pub async fn login(
         Ok(user_id) => {
             tracing::Span::current().record("user_id", &tracing::field::display(&user_id));
             session.renew();
-            let _ = session.insert_user_id(user_id).map_err(|e| {
+            session.insert_user_id(user_id).map_err(|e| {
                 let error = LoginError::UnexpectedError(e.into());
                 InternalError::from_response(error, HttpResponse::InternalServerError().finish())
-            });
+            })?;
             let body = UserResponse {
                 user_id,
                 user_name: username,
@@ -54,10 +55,4 @@ pub async fn login(
             }
         },
     }
-}
-
-#[derive(serde::Serialize)]
-struct UserResponse {
-    pub user_id: uuid::Uuid,
-    pub user_name: String,
 }

@@ -1,46 +1,31 @@
 use actix_web::{error::InternalError, web, HttpResponse};
-use secrecy::{ExposeSecret, Secret};
+use secrecy::ExposeSecret;
 use sqlx::PgPool;
 
 use crate::{
-    authentication::{validate_credentials, Credentials, UserId},
-    domain::AuthError,
-    utils::{e500, get_username},
+    authentication::{validate_credentials, validate_password_length, Credentials, UserId},
+    domain::{e500, to_bad_request_response, AuthError, PasswordChangeRequest},
+    queries::get_username,
 };
 
-#[derive(serde::Deserialize)]
-pub struct PasswordChangeData {
-    current_password: Secret<String>,
-    new_password: Secret<String>,
-    new_password_check: Secret<String>,
-}
-
+#[tracing::instrument(
+    name="Change Password"
+    skip(data, pool, user_id)
+    fields(username=tracing::field::Empty, user_id=tracing::field::Empty)
+)]
 pub async fn change_password(
-    form: web::Json<PasswordChangeData>,
+    data: web::Json<PasswordChangeRequest>,
     pool: web::Data<PgPool>,
     user_id: web::ReqData<UserId>,
 ) -> Result<HttpResponse, actix_web::Error> {
     let user_id = user_id.into_inner();
 
-    if form.new_password.expose_secret() != form.new_password_check.expose_secret() {
+    validate_password_length(&data.new_password)
+        .map_err(|(e, r)| InternalError::from_response(e, r))?;
+
+    if data.new_password.expose_secret() != data.new_password_check.expose_secret() {
         let reason = "Two different passwords were entered - the field values must match.";
-        let response = HttpResponse::BadRequest().reason(reason).finish();
-        let error = anyhow::anyhow!(reason);
-        return Err(InternalError::from_response(error, response).into());
-    }
-
-    if form.new_password.expose_secret().len() < 12 {
-        let reason =
-            "The new password is too short - it must be between 12 and 128 characters long.";
-        let response = HttpResponse::BadRequest().reason(reason).finish();
-        let error = anyhow::anyhow!(reason);
-        return Err(InternalError::from_response(error, response).into());
-    }
-
-    if form.new_password.expose_secret().len() > 128 {
-        let reason =
-            "The new password is too long - it must be between 12 and 128 characters long.";
-        let response = HttpResponse::BadRequest().reason(reason).finish();
+        let response = to_bad_request_response(reason);
         let error = anyhow::anyhow!(reason);
         return Err(InternalError::from_response(error, response).into());
     }
@@ -49,7 +34,7 @@ pub async fn change_password(
 
     let credentials = Credentials {
         username,
-        password: form.0.current_password,
+        password: data.0.current_password,
     };
     if let Err(e) = validate_credentials(credentials, &pool).await {
         return match e {
@@ -63,7 +48,7 @@ pub async fn change_password(
         };
     }
 
-    crate::authentication::change_password(*user_id, form.0.new_password, &pool)
+    crate::authentication::change_password(*user_id, data.0.new_password, &pool)
         .await
         .map_err(e500)?;
 

@@ -8,7 +8,7 @@ use std::ops::Deref;
 use uuid::Uuid;
 
 use crate::authentication::session_state::TypedSession;
-use crate::utils::e500;
+use crate::domain::e500;
 
 #[derive(Copy, Clone, Debug)]
 pub struct UserId(Uuid);

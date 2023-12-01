@@ -11,6 +11,7 @@ use uuid::Uuid;
 pub struct TestUser {
     pub user_id: Uuid,
     pub user_name: String,
+    pub email: String,
     pub password: String,
 }
 
@@ -19,6 +20,7 @@ impl TestUser {
         Self {
             user_id: Uuid::new_v4(),
             user_name: Uuid::new_v4().to_string(),
+            email: Uuid::new_v4().to_string(),
             password: Uuid::new_v4().to_string(),
         }
     }
@@ -35,10 +37,11 @@ impl TestUser {
         .to_string();
 
         sqlx::query!(
-            "INSERT INTO users (user_id, user_name, password_hash)
-            VALUES($1, $2, $3)",
+            "INSERT INTO users (user_id, user_name, email, password_hash)
+            VALUES($1, $2, $3, $4)",
             self.user_id,
             self.user_name,
+            self.email,
             password_hash,
         )
         .execute(pool)
@@ -116,6 +119,18 @@ impl TestApp {
             .await
             .expect("Failed to execute request.")
     }
+
+    pub async fn post_create_user<Body>(&self, body: &Body) -> reqwest::Response
+    where
+        Body: serde::Serialize,
+    {
+        self.api_client
+            .post(&format!("{}/api/auth/createuser", &self.address))
+            .json(body)
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
 }
 
 pub async fn spawn_app() -> TestApp {
@@ -163,6 +178,11 @@ pub fn assert_is_bad_request(response: &reqwest::Response) {
 
 pub fn assert_is_success(response: &reqwest::Response) {
     assert_eq!(response.status().as_u16(), 200);
+}
+
+#[derive(serde::Deserialize)]
+pub struct BadRequestJson {
+    pub error_message: String,
 }
 
 async fn configure_database(config: &DatabaseSettings) -> PgPool {

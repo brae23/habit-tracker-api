@@ -1,4 +1,8 @@
-use crate::{domain::AuthError, telemetry::spawn_blocking_with_tracing};
+use crate::{
+    domain::{to_bad_request_response, AuthError},
+    telemetry::spawn_blocking_with_tracing,
+};
+use actix_web::HttpResponse;
 use anyhow::Context;
 use argon2::{
     password_hash::SaltString, Argon2, Params, PasswordHash, PasswordHasher, PasswordVerifier,
@@ -69,6 +73,38 @@ pub async fn change_password(
     Ok(())
 }
 
+#[tracing::instrument(name = "Validate password length", skip(password))]
+pub fn validate_password_length(
+    password: &Secret<String>,
+) -> Result<(), (anyhow::Error, HttpResponse)> {
+    if password.expose_secret().len() < 12 {
+        let reason =
+            "The new password is too short - it must be between 12 and 128 characters long.";
+        return Err((anyhow::anyhow!(reason), to_bad_request_response(reason)));
+    }
+
+    if password.expose_secret().len() > 128 {
+        let reason =
+            "The new password is too long - it must be between 12 and 128 characters long.";
+        return Err((anyhow::anyhow!(reason), to_bad_request_response(reason)));
+    }
+
+    Ok(())
+}
+
+#[tracing::instrument(name = "Compute password hash", skip(password))]
+pub fn compute_password_hash(password: Secret<String>) -> Result<Secret<String>, anyhow::Error> {
+    let salt = SaltString::generate(&mut rand::thread_rng());
+    let password_hash = Argon2::new(
+        argon2::Algorithm::Argon2id,
+        Version::V0x13,
+        Params::new(15000, 2, 1, None).unwrap(),
+    )
+    .hash_password(password.expose_secret().as_bytes(), &salt)?
+    .to_string();
+    Ok(Secret::new(password_hash))
+}
+
 #[tracing::instrument(
     name = "Verify password hash",
     skip(expected_password_hash, password_candidate)
@@ -108,16 +144,4 @@ async fn get_stored_credentials(
     .map(|row| (row.user_id, Secret::new(row.password_hash)));
 
     Ok(row)
-}
-
-fn compute_password_hash(password: Secret<String>) -> Result<Secret<String>, anyhow::Error> {
-    let salt = SaltString::generate(&mut rand::thread_rng());
-    let password_hash = Argon2::new(
-        argon2::Algorithm::Argon2id,
-        Version::V0x13,
-        Params::new(15000, 2, 1, None).unwrap(),
-    )
-    .hash_password(password.expose_secret().as_bytes(), &salt)?
-    .to_string();
-    Ok(Secret::new(password_hash))
 }

@@ -2,6 +2,7 @@ CREATE TABLE users(
     user_id uuid NOT NULL,
     PRIMARY KEY(user_id),
     user_name TEXT NOT NULL UNIQUE,
+    email TEXT NOT NULL,
     password_hash TEXT NOT NULL,
     account_created_on TIMESTAMPTZ NOT NULL DEFAULT current_timestamp
 );

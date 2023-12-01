@@ -1,9 +1,9 @@
-mod error;
+mod auth;
+mod errors;
 mod list;
 mod task;
-mod user;
 
-pub use error::*;
-pub use list::*;
-pub use task::*;
-pub use user::*;
+pub use auth::*;
+pub use errors::*;
+pub use list::List;
+pub use task::Task;
