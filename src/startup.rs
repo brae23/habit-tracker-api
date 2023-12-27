@@ -20,7 +20,7 @@ use std::net::TcpListener;
 use tracing_actix_web::TracingLogger;
 
 use crate::handlers::{
-    change_password, create_user, get_daily_task_list, health_check, log_out, login,
+    change_password, create_user, get_daily_task_list, health_check, log_out, login, create_task, update_task,
 };
 
 pub struct Application {
@@ -103,6 +103,8 @@ pub async fn run(
                 web::scope("/api")
                     .wrap(from_fn(reject_anonymous_users))
                     .route("/dailytasklist", web::get().to(get_daily_task_list))
+                    .route("/task", web::post().to(create_task))
+                    .route("/task", web::put().to(update_task))
                     .route("/auth/logout", web::post().to(log_out))
                     .route("/auth/changepassword", web::post().to(change_password)),
             )
